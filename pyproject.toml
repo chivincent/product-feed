@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "product-feed"
+version = "0.1.0"
+description = ""
+authors = ["Vincent Chi <song374561@chivincent.net>"]
+readme = "README.md"
+packages = [{include = "product_feed"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
