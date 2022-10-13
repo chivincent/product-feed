@@ -1,12 +1,15 @@
+from datetime import datetime
 from decimal import Decimal
 from gettext import install
 from operator import is_
+from typing import Tuple
 from faker import Faker
+from iso3166 import countries_by_alpha2
 from pydantic import HttpUrl
-from iso4217 import Currency
+from iso4217 import Currency 
 
 from product_feed.model import GoogleProduct
-from product_feed.model.google import Availability
+from product_feed.model.google import AgeGroup, Availability, Condition, Destination, EnergyEfficiency, Gender, Installment, LenUnit, LoyaltyPoints, Pause, ProductDetail, Shipping, SizeSystem, SizeType, SubscriptionCost, Tax, Unit, WeightUnit
 
 f = Faker()
 
@@ -60,7 +63,7 @@ class TestGoogleProduct:
         material='leather',
         pattern='striped',
         size='S',
-        size_type='regular',
+        size_type='regular,petite',
         size_system='US',
         item_group_id='123456',
         product_length='20 in',
@@ -107,5 +110,65 @@ class TestGoogleProduct:
     def test_full_fields(self):
         assert self.full_product is not None
 
-        print(self.full_product.tax)
+        assert isinstance(self.full_product.availability_date, datetime)
+        assert isinstance(self.full_product.cost_of_goods_sold[0], Decimal)
+        assert isinstance(self.full_product.cost_of_goods_sold[1], Currency)
+        assert isinstance(self.full_product.expiration_date, datetime)
+        assert isinstance(self.full_product.price[0], Decimal)
+        assert isinstance(self.full_product.price[1], Currency)
+        assert isinstance(self.full_product.sale_price[0], Decimal)
+        assert isinstance(self.full_product.sale_price[1], Currency)
+        assert isinstance(self.full_product.sale_price_effective_date[0], datetime)
+        assert isinstance(self.full_product.sale_price_effective_date[1], datetime)
+        assert isinstance(self.full_product.unit_pricing_measure, Unit)
+        assert isinstance(self.full_product.unit_pricing_base_measure[0], int)
+        assert isinstance(self.full_product.unit_pricing_base_measure[1], Unit)
+        assert isinstance(self.full_product.ads_redirect, HttpUrl)
 
+
+        assert len(self.full_product.additional_image_link) == 10
+        assert self.full_product.installment == Installment(months=3, amount=(Decimal('0.5'), Currency.twd))
+        assert self.full_product.subscription_cost == SubscriptionCost(period='month', period_length=12, amount=(Decimal('0.99'), Currency.twd))
+        assert self.full_product.loyalty_points == LoyaltyPoints(name='Plan A', points_value=100, ratio=Decimal('0.1'))
+        assert len(self.full_product.product_type) == 3
+        assert self.full_product.identifier_exists == False
+        assert self.full_product.condition == Condition.NEW
+        assert self.full_product.adult == True
+        assert self.full_product.multipack == 6
+        assert self.full_product.is_bundle == True
+        assert self.full_product.energy_efficiency_class == EnergyEfficiency.APP
+        assert self.full_product.min_energy_efficiency_class == EnergyEfficiency.A
+        assert self.full_product.max_energy_efficiency_class == EnergyEfficiency.APPP
+        assert self.full_product.age_group == AgeGroup.KIDS
+        assert self.full_product.color == ['red', 'pink']
+        assert self.full_product.gender == Gender.UNISEX
+        assert self.full_product.material == 'leather'
+        assert self.full_product.pattern == 'striped'
+        assert self.full_product.size == 'S'
+        assert self.full_product.size_type == [SizeType.REGULAR, SizeType.PETITE]
+        assert self.full_product.size_system == SizeSystem.US
+        assert self.full_product.product_length == ('20', LenUnit.IN)
+        assert self.full_product.product_width == ('20', LenUnit.CM)
+        assert self.full_product.product_height == ('20', LenUnit.IN)
+        assert self.full_product.product_weight == ('3.5', WeightUnit.LB)
+        assert len(self.full_product.product_detail) == 4
+        assert self.full_product.product_detail == [
+            ProductDetail('General', 'Product Type', 'Digital player'),
+            ProductDetail('General', 'Digital Player Type', 'Flash based'),
+            ProductDetail('Display', 'Resolution', '432 x 240'),
+            ProductDetail('Display', 'Diagonal Size', '2.5"'),
+        ]
+        assert self.full_product.product_hightlight == ['Supports thousands of apps']
+        assert self.full_product.promotion_id == ['ABC123']
+        assert self.full_product.excluded_destination == [Destination.SHOPPING_ADS, Destination.BUY_ON_GOOGLE_LISTINGS]
+        assert self.full_product.included_destination == [Destination.DISPLAY_ADS, Destination.LOCAL_INVENTORY_ADS]
+        assert self.full_product.shopping_ads_excluded_country == [countries_by_alpha2['US'], countries_by_alpha2['DE']]
+        assert self.full_product.pause == Pause.ADS
+        assert self.full_product.shipping == [Shipping(country=countries_by_alpha2['US'], service='Fedex', price=(Decimal('1.99'), Currency.usd))]
+        assert self.full_product.shipping_label == 'Only Fedex'
+        assert self.full_product.shipping_weight == ('3.5', WeightUnit.KG)
+        assert self.full_product.shipping_length == ('20.5', LenUnit.IN)
+        assert self.full_product.shipping_width == ('20', LenUnit.CM)
+        assert self.full_product.shipping_height == ('20.5', LenUnit.IN)
+        assert self.full_product.ships_from_country == countries_by_alpha2['US']
+        assert self.full_product.tax == [Tax(country='US', region='CA', rate=Decimal('5.0'), tax_ship=True)]

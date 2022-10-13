@@ -46,7 +46,7 @@ class Pause(Enum):
 
 class Destination(Enum):
     SHOPPING_ADS = 'Shopping_ads'
-    BUY_ON_GOOGLE_LISTING = 'Buy_on_Google_listings'
+    BUY_ON_GOOGLE_LISTINGS = 'Buy_on_Google_listings'
     DISPLAY_ADS = 'Display_ads'
     LOCAL_INVENTORY_ADS = 'Local_inventory_ads'
     FREE_LISTINGS = 'Free_listings'
@@ -563,7 +563,7 @@ class Product(BaseModel):
                 price = p[3].split(' ', 1)
                 ret.append(Shipping(
                     country=countries_by_alpha2[p[0]],
-                    region=p[1],
+                    region=None if p[1] == '' else p[1],
                     service=p[2],
                     price=(Decimal(price[0]), Currency(price[1]))
                 ))
