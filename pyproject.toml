@@ -9,6 +9,9 @@ packages = [{include = "product_feed"}]
 [tool.poetry.dependencies]
 python = "^3.10"
 pydantic = "^1.10.2"
+python-dateutil = "^2.8.2"
+iso4217 = "^1.11.20220401"
+iso3166 = "^2.1.1"
 
 
 [tool.poetry.group.dev.dependencies]
