@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from itertools import count
 from typing import Tuple
 import re
 
@@ -151,16 +152,14 @@ class LenUnit(Enum):
 
 class WeightUnit(Enum):
     LB = 'lb'
-    LBS = 'lbs'
     OZ = 'oz'
     G = 'g'
-    KG = 'KG'
+    KG = 'kg'
 
 class Unit(Enum):
     # Weight
     OZ = 'oz'
     LB = 'lb'
-    LBS = 'lbs'
     MG = 'mg'
     G = 'g'
     KG = 'kg'
@@ -192,7 +191,7 @@ class Unit(Enum):
     CT = 'ct'
 
 
-class Google(BaseModel):
+class Product(BaseModel):
     # Basic product data
     id: str
     @validator('id')
@@ -224,10 +223,10 @@ class Google(BaseModel):
         assert len(v) <= 2000, 'image_link must be less than 2000 characters'
         return v
 
-    additional_image_link: list[str] | None
+    additional_image_link: list[HttpUrl] | None
     @validator('additional_image_link', pre=True)
     def additional_image_link_format(cls, v):
-        if v:
+        if v and isinstance(v, str):
             assert len(v) <= 2000, 'additional_image_link must be less than 2000 characters'
             # When it is from CSV, it is a string and should be converted to a list by splitting on commas
             # The list is then validated to ensure it is less than 10 items
@@ -246,12 +245,12 @@ class Google(BaseModel):
     availability_date: datetime | None
     @validator('availability_date', pre=True)
     def availability_date_format(cls, v):
-        if v:
+        if v and isinstance(v, str):
             assert len(v) <= 25, 'availability_date must be less than 25 characters'
             v = dateutil.parser.parse(v)
         return v
 
-    cost_of_goods_sold: Tuple[Decimal, Currency] | None
+    cost_of_goods_sold: Amount | None
     @validator('cost_of_goods_sold', pre=True)
     def cost_of_goods_sold_format(cls, v):
         if v:
@@ -297,6 +296,8 @@ class Google(BaseModel):
     @validator('unit_pricing_measure', pre=True)
     def unit_pricing_measure_format(cls, v):
         if v:
+            v = v.lower()
+            v = 'lb' if v == 'lbs' else v
             v = Unit(v)
         return v
 
@@ -345,11 +346,11 @@ class Google(BaseModel):
     @validator('loyalty_points', pre=True)
     def loyalty_points_format(cls, v):
         if v and isinstance(v, str):
-            parsed = v.split(':', 2)
+            parsed = v.split(':', 3)
             assert len(parsed) == 3, 'loyalty_points must be in the format "Plan A:100:0.5"'
             v = LoyaltyPoints(
                 name=parsed[0],
-                points=parsed[1],
+                points_value=parsed[1],
                 ratio=parsed[2]
             )
         return v
@@ -375,7 +376,11 @@ class Google(BaseModel):
     gtin: list[str] | None
     @validator('gtin', pre=True)
     def gtin_format(cls, v):
-        pass
+        if v and isinstance(v, str):
+            v = [''.join(c for c in v if c.isdigit())]
+            for gtin in v:
+                assert len(gtin) == 14 or len(gtin) == 13 or len(gtin) == 12 or len(gtin) == 8, 'gtin must be 8, 12, 13, or 14 digits'
+        return v
 
     mpn: str | None
     @validator('mpn')
@@ -397,7 +402,7 @@ class Google(BaseModel):
     max_energy_efficiency_class: EnergyEfficiency | None
     age_group: AgeGroup | None
     color: list[str] | None
-    @validator('color')
+    @validator('color', pre=True)
     def color_format(cls, v):
         if v:
             assert len(v) <= 100, 'color must be less than 100 characters'
@@ -449,7 +454,7 @@ class Google(BaseModel):
         if v:
             parsed = v.split(' ', 1)
             assert len(parsed) == 2, 'product_length, product_width, product_height must be in the format "15 cm"'
-            assert parsed[0] >= 1 and parsed[0] <= 3000, 'product_length, product_width, product_height must be between 1 and 3000'
+            assert float(parsed[0]) >= 1 and float(parsed[0]) <= 3000, 'product_length, product_width, product_height must be between 1 and 3000'
             v = (parsed[0], LenUnit(parsed[1]))
         return v
 
@@ -459,8 +464,8 @@ class Google(BaseModel):
         if v:
             parsed = v.split(' ', 1)
             assert len(parsed) == 2, 'product_weight must be in the format "15 kg"'
-            assert parsed[0] >= 0 and parsed[0] <= 2000, 'product_weight must be between 1 and 3000'
-            v = (parsed[0], WeightUnit(parsed[1]))
+            assert float(parsed[0]) >= 0 and float(parsed[0]) <= 2000, 'product_weight must be between 1 and 3000'
+            v = (parsed[0], WeightUnit('lb' if parsed[1] == 'lbs' else parsed[1]))
         return v
 
     product_detail: list[ProductDetail] | None
@@ -506,10 +511,13 @@ class Google(BaseModel):
         return v
 
     promotion_id: list[str] | None
-    @validator('promotion_id')
+    @validator('promotion_id', pre=True)
     def promotion_id_len(cls, v):
-        if v:
+        if v and isinstance(v, str):
+            v = [v]
+        elif v and isinstance(v, list):
             assert len(v) <= 10, 'promotion_id must be less than 10 items'
+        return v
 
     # Destinations
     excluded_destination: list[Destination] | None
@@ -529,17 +537,45 @@ class Google(BaseModel):
     @validator('shopping_ads_excluded_country', pre=True)
     def shopping_ads_excluded_country_format(cls, v):
         if v and isinstance(v, str):
-            v = v.split(',', 100)[:100]
+            parsed = v.split(',', 100)[:100]
+            ret = []
+            for country in parsed:
+                ret.append(countries_by_alpha2[country])
+            v = ret[:100]
         elif v and isinstance(v, list):
             ret = []
             for country in v:
-                ret.append(countries_by_alpha2(country))
+                ret.append(countries_by_alpha2[country])
             v = ret[:100]
         return v
     pause: Pause | None
 
     # Shipping
     shipping: list[Shipping] | None
+    @validator('shipping', pre=True)
+    def shipping_format(cls, v):
+        if v and isinstance(v, str):
+            parsed = v.split(',', 100)[:100]
+            ret = []
+            for shipping in parsed:
+                p = shipping.split(':', 4)
+                assert len(p) == 4, 'shipping must be in the format "country:region:service:price"'
+                price = p[3].split(' ', 1)
+                ret.append(Shipping(
+                    country=countries_by_alpha2[p[0]],
+                    region=p[1],
+                    service=p[2],
+                    price=(Decimal(price[0]), Currency(price[1]))
+                ))
+            v = ret[:100]
+        elif v and isinstance(v, list):
+            ret = []
+            for shipping in v:
+                ret.append(shipping)
+            v = ret[:100]
+        return v
+
+
     shipping_label: str | None
     @validator('shipping_label')
     def shipping_label_len(cls, v):
@@ -554,9 +590,9 @@ class Google(BaseModel):
             parsed = v.split(' ', 1)
             assert len(parsed) == 2, 'shipping_weight must be in the format "15 kg"'
             if parsed[1] == 'lb' or parsed[1] == 'lbs':
-                assert parsed[0] >= 0 and parsed[0] <= 2000, 'shipping_weight must be between 1 and 3000 lbs'
+                assert float(parsed[0]) >= 0 and float(parsed[0]) <= 2000, 'shipping_weight must be between 1 and 3000 lbs'
             if parsed[1] == 'kg':
-                assert parsed[0] >= 0 and parsed[0] <= 1000, 'shipping_weight must be between 1 and 1000 kg'
+                assert float(parsed[0]) >= 0 and float(parsed[0]) <= 1000, 'shipping_weight must be between 1 and 1000 kg'
             v = (parsed[0], WeightUnit(parsed[1]))
         return v
 
@@ -569,9 +605,9 @@ class Google(BaseModel):
             parsed = v.split(' ', 1)
             assert len(parsed) == 2, 'shipping_length, shipping_width, shipping_height must be in the format "15 cm"'
             if parsed[1] == 'in':
-                assert parsed[0] <= 150, 'shipping_length, shipping_width, shipping_height must be less than 150 inch'
+                assert float(parsed[0]) <= 150, 'shipping_length, shipping_width, shipping_height must be less than 150 inch'
             if parsed[1] == 'cm':
-                assert parsed[0] <= 400, 'shipping_length, shipping_width, shipping_height must be less than 400 cm'
+                assert float(parsed[0]) <= 400, 'shipping_length, shipping_width, shipping_height must be less than 400 cm'
             v = (parsed[0], LenUnit(parsed[1]))
         return v
 
@@ -579,7 +615,7 @@ class Google(BaseModel):
     @validator('ships_from_country', pre=True)
     def ships_from_country_format(cls, v):
         if v:
-            v = countries_by_alpha2(v)
+            v = countries_by_alpha2[v]
         return v
 
     transit_time_label: str | None
@@ -599,6 +635,33 @@ class Google(BaseModel):
 
     # Tax
     tax: list[Tax] | None
+    @validator('tax', pre=True)
+    def tax_format(cls, v):
+        if v and isinstance(v, str):
+            parsed = v.split(',', 100)[:100]
+            ret = []
+            for tax in parsed:
+                p = tax.split(':', 4)
+                assert len(p) == 4, 'tax must be in the format "country:region:rate:tax_ship"'
+                tax_ship = None
+                p[3] = p[3].lower()
+                if p[3] == 'true' or p[3] == 'yes':
+                    tax_ship = True
+                elif p[3] == 'false' or p[3] == 'no':
+                    tax_ship = False
+                ret.append(Tax(
+                    country=p[0],
+                    region=p[1],
+                    rate=Decimal(p[2]),
+                    tax_ship=tax_ship
+                ))
+            v = ret[:100]
+        elif v and isinstance(v, list):
+            ret = []
+            for tax in v:
+                ret.append(tax)
+            v = ret[:100]
+        return v
     tax_category: str | None
     @validator('tax_category')
     def tax_category_len(cls, v):
